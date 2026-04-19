@@ -750,7 +750,7 @@ export default function App() {
             <div className="inline-block mb-4 cursor-default select-none">
               <img 
                 src={EVN_HCMC_LOGO} 
-                alt="EVN HCMC" 
+                alt="EVNHCMC" 
                 className="h-24 w-auto object-contain"
                 referrerPolicy="no-referrer"
               />
@@ -814,7 +814,7 @@ export default function App() {
           </form>
           
           <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-400">© 2026 EVN HCMC - Hệ thống quản lý nội bộ</p>
+            <p className="text-xs text-slate-400">© 2026 EVNHCMC - Hệ thống quản lý nội bộ</p>
           </div>
         </div>
       </div>
@@ -827,10 +827,10 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center cursor-pointer select-none" onClick={handleLogoClick} title="EVN HCMC">
+            <div className="flex items-center cursor-pointer select-none" onClick={handleLogoClick} title="EVNHCMC">
               <img 
                 src={EVN_HCMC_LOGO} 
-                alt="EVN HCMC" 
+                alt="EVNHCMC" 
                 className="h-16 w-auto object-contain"
                 referrerPolicy="no-referrer"
               />
