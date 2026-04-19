@@ -461,7 +461,7 @@ export default function App() {
       (async () => {
         let htmlText = '';
         try {
-          const htmlUrl = 'https://docs.google.com/spreadsheets/d/1B237SBdWeaQvc0GWH7hwcJI9ztiSxdBxXFbN4nBnxzU/htmlview/sheet?headers=true&gid=0';
+          const htmlUrl = 'https://docs.google.com/spreadsheets/d/14BF0RUfBq-Arl6ngVvD44fQnNayBEC1Xtz-RFgzA4GI/htmlview/sheet?headers=true&gid=0';
           let htmlResponse;
           try {
             htmlResponse = await fetch(htmlUrl);
