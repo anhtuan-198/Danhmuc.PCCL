@@ -294,7 +294,7 @@ export default function App() {
       });
 
       // Show success, and schedule a data fetch
-      setImportMessage({ type: 'success', text: 'Gửi dữ liệu thành công! Hãy đợi một lát để dữ liệu được cập nhật.' });
+      setImportMessage({ type: 'success', text: 'Lưu dữ liệu thành công!' });
       
       // Reset form variables to original states while preserving the active department
       setImportForm(prev => ({
@@ -994,7 +994,7 @@ export default function App() {
                     disabled={isImporting}
                     className="w-full py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold transition-colors disabled:bg-blue-400 mt-2 shadow-sm"
                   >
-                    {isImporting ? 'ĐANG GỬI...' : 'GỬI DỮ LIỆU'}
+                    {isImporting ? 'ĐANG LƯU...' : 'LƯU DỮ LIỆU'}
                   </button>
 
                   {importMessage && (
