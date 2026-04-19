@@ -50,6 +50,11 @@ export default function App() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [showImportProjectDropdown, setShowImportProjectDropdown] = useState(false);
+  const [importProjectSearchTerm, setImportProjectSearchTerm] = useState('');
+  const importProjectDropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const clickCountRef = useRef(0);
   const lastClickTimeRef = useRef(0);
   const projectNameRef = useRef<HTMLTextAreaElement>(null);
@@ -83,6 +88,9 @@ export default function App() {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+      }
+      if (importProjectDropdownRef.current && !importProjectDropdownRef.current.contains(event.target as Node)) {
+        setShowImportProjectDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -148,6 +156,174 @@ export default function App() {
       }
       setIsLoggingIn(false);
     }, 800);
+  };
+
+  const [importForm, setImportForm] = useState({
+    phongBan: 'QLĐT',
+    tenCongTrinh: '',
+    maCongTrinh: '',
+    noiDung: '',
+    soHieu: '',
+    ngay: new Date().toISOString().split('T')[0],
+  });
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<{type: 'error' | 'success', text: string} | null>(null);
+  const [rawDropdownData, setRawDropdownData] = useState<{phongBan: string, noiDung: string}[]>([]);
+
+  // Fetch Dropdown sheet content
+  useEffect(() => {
+    const fetchDropdown = async () => {
+      try {
+        const timestamp = new Date().getTime();
+        const DROPDOWN_GVIZ_URL = 'https://docs.google.com/spreadsheets/d/14BF0RUfBq-Arl6ngVvD44fQnNayBEC1Xtz-RFgzA4GI/gviz/tq?tqx=out:csv&sheet=' + encodeURIComponent('Dropdown');
+        const urlWithCacheBuster = `${DROPDOWN_GVIZ_URL}&t=${timestamp}`;
+        let response;
+        try {
+          response = await fetch(urlWithCacheBuster);
+          if (!response.ok) throw new Error('Direct fetch failed');
+        } catch (e) {
+          try {
+            response = await fetch(`https://corsproxy.io/?${encodeURIComponent(urlWithCacheBuster)}`);
+            if (!response.ok) throw new Error('Proxy fetch failed');
+          } catch (e2) {
+            response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(urlWithCacheBuster)}`);
+          }
+        }
+        
+        if (response && response.ok) {
+          const text = await response.text();
+          Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              const rows = results.data as any[];
+              const data: {phongBan: string, noiDung: string}[] = [];
+              
+              rows.forEach(row => {
+                const vals = Object.values(row);
+                // "Nội dung thả xuống" is usually Column B (index 1), "Tên sheet tạo dropdown" is Column C (index 2)
+                const noiDung = row['Nội dung thả xuống'] || row['Noi dung tha xuong'] || vals[1]; 
+                const phongBan = row['Tên sheet tạo dropdown'] || row['Ten sheet tao dropdown'] || vals[2];
+                
+                if (noiDung && typeof noiDung === 'string' && noiDung.trim() !== '') {
+                  data.push({
+                    phongBan: typeof phongBan === 'string' ? phongBan.trim() : '',
+                    noiDung: noiDung.trim()
+                  });
+                }
+              });
+              
+              setRawDropdownData(data);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Could not fetch Dropdown sheet", e);
+      }
+    };
+    fetchDropdown();
+  }, []);
+
+  // Pre-fill the import form when modal opens
+  useEffect(() => {
+    if (showImportModal) {
+      setImportForm(prev => ({
+        ...prev,
+        tenCongTrinh: projectInfo["Tên dự án/công trình"] || '',
+        maCongTrinh: projectInfo["Mã công trình"] || ''
+      }));
+    }
+  }, [showImportModal, projectInfo]);
+
+  const handleImportSubmit = async () => {
+    if (!scriptUrl) {
+      setImportMessage({ type: 'error', text: 'Vui lòng cấu hình Apps Script Web App URL.' });
+      return;
+    }
+    
+    if (!importForm.maCongTrinh || !importForm.phongBan) {
+      setImportMessage({ type: 'error', text: 'Vui lòng điền mã công trình và phòng ban.' });
+      return;
+    }
+
+    setIsImporting(true);
+    setImportMessage(null);
+
+    try {
+      let base64File = '';
+      let fileName = '';
+      let mimeType = '';
+
+      if (importFile) {
+        const reader = new FileReader();
+        reader.readAsDataURL(importFile);
+        await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(null);
+          reader.onerror = error => reject(error);
+        });
+        const result = reader.result as string;
+        base64File = result.split(',')[1];
+        fileName = importFile.name;
+        mimeType = importFile.type;
+      }
+
+      // Pass the folder ID and data
+      const payload = {
+        action: 'importData',
+        phongBan: importForm.phongBan,
+        projectCode: importForm.maCongTrinh,
+        noiDung: importForm.noiDung,
+        soHieu: importForm.soHieu,
+        ngay: importForm.ngay,
+        fileName: fileName,
+        mimeType: mimeType,
+        fileData: base64File,
+        targetFolderId: '13UFWLjjqJFc2omQ94TxwjJlMSl38Hwcj'
+      };
+
+      // Since Apps script blocks CORS responses on redirects, we use no-cors. 
+      // We assume it succeeds if no network error is thrown.
+      await fetch(scriptUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+        mode: 'no-cors'
+      });
+
+      // Show success, and schedule a data fetch
+      setImportMessage({ type: 'success', text: 'Gửi dữ liệu thành công! Hãy đợi một lát để dữ liệu được cập nhật.' });
+      
+      // Reset form variables to original states while preserving the active department
+      setImportForm(prev => ({
+        ...prev, 
+        soHieu: '', 
+        noiDung: '', 
+        ngay: new Date().toISOString().split('T')[0],
+        tenCongTrinh: '',
+        maCongTrinh: ''
+      }));
+      setImportFile(null);
+      setImportProjectSearchTerm('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+      // Polling for update
+      if (projectInfo["Mã công trình"]) {
+        setTimeout(() => fetchData(projectInfo["Mã công trình"], 10), 500);
+      } else {
+        setTimeout(() => fetchData(), 500);
+      }
+      
+    } catch (err: any) {
+      console.error(err);
+      setImportMessage({ type: 'error', text: `Lỗi hệ thống: ${err.message}. Hãy cấp quyền DriveApp trong Apps Script.` });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleLogout = () => {
@@ -285,7 +461,7 @@ export default function App() {
       (async () => {
         let htmlText = '';
         try {
-          const htmlUrl = 'https://docs.google.com/spreadsheets/d/14BF0RUfBq-Arl6ngVvD44fQnNayBEC1Xtz-RFgzA4GI/htmlview/sheet?headers=true&gid=0';
+          const htmlUrl = 'https://docs.google.com/spreadsheets/d/1B237SBdWeaQvc0GWH7hwcJI9ztiSxdBxXFbN4nBnxzU/htmlview/sheet?headers=true&gid=0';
           let htmlResponse;
           try {
             htmlResponse = await fetch(htmlUrl);
@@ -681,37 +857,162 @@ export default function App() {
         {/* Import Modal */}
         {showImportModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col h-[90vh]">
-              <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+              <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-white rounded-t-2xl">
                 <div className="flex items-center gap-2">
                   <Database className="w-5 h-5 text-blue-600" />
-                  <h3 className="font-bold text-slate-800 uppercase">Nhập dữ liệu</h3>
+                  <h3 className="font-bold text-slate-800 uppercase text-lg">Nhập dữ liệu</h3>
                 </div>
                 <button 
                   onClick={() => {
                     setShowImportModal(false);
+                    setImportMessage(null);
                     fetchData();
                   }}
-                  className="p-2 hover:bg-slate-200 rounded-full text-slate-500 hover:text-slate-700 transition-all"
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all"
                   title="Đóng cửa sổ"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <div className="flex-1 overflow-hidden relative bg-slate-100">
-                <iframe 
-                  src={scriptUrl} 
-                  className="w-full h-full border-none"
-                  title="Apps Script Form"
-                />
+              
+              <div className="p-6 overflow-y-auto flex-1 bg-white">
+                <div className="space-y-5">
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Chọn Phòng ban/Đơn vị:</label>
+                    <select
+                      value={importForm.phongBan}
+                      onChange={e => setImportForm({...importForm, phongBan: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 shadow-sm bg-white"
+                    >
+                      {["KTAT","KHVT","QLĐT","TCG","TVTK","TVGS","XL","TCKT","QLLĐ","DVĐL","ĐĐHTĐ","ETC","Kiểm toán","SXD","TCT","UBND"].map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="relative z-20" ref={importProjectDropdownRef}>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Tên công trình:</label>
+                    <input
+                      type="text"
+                      value={showImportProjectDropdown ? importProjectSearchTerm : importForm.tenCongTrinh}
+                      onChange={e => setImportProjectSearchTerm(e.target.value)}
+                      onFocus={() => {
+                        setImportProjectSearchTerm('');
+                        setShowImportProjectDropdown(true);
+                      }}
+                      placeholder="Nhập tên để tìm kiếm..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 shadow-sm"
+                    />
+                    {showImportProjectDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto z-[60]">
+                        {availableProjects.filter(p => !importProjectSearchTerm || p["Tên dự án/công trình"]?.toLowerCase().includes(importProjectSearchTerm.toLowerCase())).map((project, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setImportForm({
+                                ...importForm, 
+                                tenCongTrinh: project["Tên dự án/công trình"],
+                                maCongTrinh: project["Mã công trình"]
+                              });
+                              setShowImportProjectDropdown(false);
+                            }}
+                            className="px-4 py-3 hover:bg-emerald-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors"
+                          >
+                            <div className="font-medium text-slate-800">{project["Tên dự án/công trình"]}</div>
+                            <div className="text-xs text-slate-500 mt-1">Mã CT: {project["Mã công trình"]}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Mã công trình:</label>
+                    <input
+                      type="text"
+                      value={importForm.maCongTrinh}
+                      disabled
+                      placeholder="Mã công trình sẽ tự động điền..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-500 shadow-sm bg-slate-100 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Nội dung văn bản:</label>
+                    <select
+                      value={importForm.noiDung}
+                      onChange={e => setImportForm({...importForm, noiDung: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 shadow-sm bg-white"
+                    >
+                      <option value="">-- Chọn nội dung văn bản --</option>
+                      {Array.from(new Set(rawDropdownData.filter(item => item.phongBan === importForm.phongBan).map(item => item.noiDung))).map(item => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Số hiệu văn bản:</label>
+                    <input
+                      type="text"
+                      value={importForm.soHieu}
+                      onChange={e => setImportForm({...importForm, soHieu: e.target.value})}
+                      placeholder="Nhập số văn bản..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 shadow-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Ngày văn bản:</label>
+                    <input
+                      type="date"
+                      value={importForm.ngay}
+                      onChange={e => setImportForm({...importForm, ngay: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 shadow-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block mb-1.5 text-sm font-bold text-slate-700">Đính kèm văn bản (PDF, Ảnh, Word...):</label>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={e => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          setImportFile(e.target.files[0]);
+                        } else {
+                          setImportFile(null);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-700 bg-white shadow-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleImportSubmit}
+                    disabled={isImporting}
+                    className="w-full py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold transition-colors disabled:bg-blue-400 mt-2 shadow-sm"
+                  >
+                    {isImporting ? 'ĐANG GỬI...' : 'GỬI DỮ LIỆU'}
+                  </button>
+
+                  {importMessage && (
+                    <div className={`mt-4 text-sm font-bold flex items-center justify-center gap-2 ${importMessage.type === 'error' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {importMessage.type === 'error' ? <X className="w-5 h-5 font-bold" /> : <div className="w-2 h-2 rounded-full bg-emerald-600"></div>}
+                      {importMessage.text}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="px-6 py-4 border-t border-slate-200 flex justify-end bg-slate-50">
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end bg-white rounded-b-2xl">
                 <button 
                   onClick={() => {
                     setShowImportModal(false);
+                    setImportMessage(null);
                     fetchData();
                   }}
-                  className="px-8 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-md"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-bold transition-colors shadow-sm"
                 >
                   HOÀN TẤT
                 </button>
