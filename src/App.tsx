@@ -756,7 +756,7 @@ export default function App() {
               />
             </div>
             <h1 className="text-blue-900 text-2xl font-bold uppercase tracking-wider">Đăng nhập hệ thống</h1>
-            <p className="text-slate-500 mt-2 text-sm font-medium">Quản lý danh mục ĐTXD</p>
+            <p className="text-slate-500 mt-2 text-sm font-medium">Danh mục ĐTXD</p>
           </div>
           
           <form onSubmit={handleLogin} className="p-8 space-y-6">
@@ -835,7 +835,7 @@ export default function App() {
                 referrerPolicy="no-referrer"
               />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-blue-900 uppercase tracking-tight">QUẢN LÝ DANH MỤC ĐTXD</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-blue-900 uppercase tracking-tight">DANH MỤC ĐTXD</h1>
           </div>
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col items-end mr-2">
@@ -1484,7 +1484,7 @@ export default function App() {
       )}
       <footer className="bg-blue-900 text-white/80 py-4 mt-12">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs font-medium tracking-wide">
-          <p>© 2026 Công ty Điện lực Vũng Tàu</p>
+          <p>© 2026 Công ty Điện lực Chợ Lớn</p>
         </div>
       </footer>
     </div>
